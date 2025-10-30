@@ -5,8 +5,7 @@
 // Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
 
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
@@ -14,10 +13,149 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
+enum Peran {
+  SUPER_ADMIN
+  ADMIN_SEKOLAH
+  GURU
+}
+
+enum StatusKehadiran {
+  HADIR
+  SAKIT
+  IZIN
+  ALPA
+}
+
+model sekolah {
+  id_sekolah   Int      @id @default(autoincrement())
+  nama_sekolah String   @db.VarChar(255)
+  alamat       String?
+  telepon      String?  @db.VarChar(20)
+  created_at   DateTime @default(now())
+
+  kelas             kelas[]
+  pengguna          pengguna[]
+  pendaftaran_guru  pendaftaran_guru[]
+  jadwal_mengajar   jadwal_mengajar[]
+  sesi_absensi_guru sesi_absensi_guru[]
+}
+
+model pengguna {
+  id_pengguna   Int      @id @default(autoincrement())
+  nama_lengkap  String   @db.VarChar(255)
+  email         String   @unique
+  password_hash String   @db.VarChar(255)
+  peran         Peran
+  created_at    DateTime @default(now())
+
+  sekolahId Int? // SUPER_ADMIN boleh null
+  sekolah   sekolah? @relation(fields: [sekolahId], references: [id_sekolah], onDelete: SetNull)
+
+  pendaftaran_guru  pendaftaran_guru[]
+  sesi_absensi_guru sesi_absensi_guru[]
+}
+
+model kelas {
+  id_kelas   Int     @id @default(autoincrement())
+  id_sekolah Int
+  nama_kelas String  @db.VarChar(100)
+  tingkat    String? @db.VarChar(10)
+  sekolah    sekolah @relation(fields: [id_sekolah], references: [id_sekolah], onDelete: Cascade)
+
+  siswa           siswa[]
+  jadwal_mengajar jadwal_mengajar[]
+}
+
+model siswa {
+  id_siswa      Int             @id @default(autoincrement())
+  id_kelas      Int?
+  nis           String?         @db.VarChar(50)
+  nama_lengkap  String          @db.VarChar(255)
+  kelas         kelas?          @relation(fields: [id_kelas], references: [id_kelas], onDelete: SetNull)
+  absensi_siswa absensi_siswa[]
+  catatan_siswa catatan_siswa[]
+}
+
+model mata_pelajaran {
+  id_mapel        Int               @id @default(autoincrement())
+  nama_mapel      String            @db.VarChar(100)
+  jadwal_mengajar jadwal_mengajar[]
+}
+
+model pendaftaran_guru {
+  id_pendaftaran Int      @id @default(autoincrement())
+  id_pengguna    Int
+  id_sekolah     Int
+  pengguna       pengguna @relation(fields: [id_pengguna], references: [id_pengguna], onDelete: Cascade)
+  sekolah        sekolah  @relation(fields: [id_sekolah], references: [id_sekolah], onDelete: Cascade)
+
+  jadwal_mengajar jadwal_mengajar[]
+}
+
+model jadwal_mengajar {
+  id_jadwal        Int               @id @default(autoincrement())
+  id_pendaftaran   Int
+  id_kelas         Int
+  id_mapel         Int
+  id_sekolah       Int
+  hari             String
+  jam_mulai        DateTime
+  jam_selesai      DateTime
+  pendaftaran_guru pendaftaran_guru  @relation(fields: [id_pendaftaran], references: [id_pendaftaran], onDelete: Cascade)
+  kelas            kelas             @relation(fields: [id_kelas], references: [id_kelas], onDelete: Cascade)
+  mata_pelajaran   mata_pelajaran    @relation(fields: [id_mapel], references: [id_mapel], onDelete: Cascade)
+  sekolah          sekolah           @relation(fields: [id_sekolah], references: [id_sekolah], onDelete: Cascade)
+  absensi_siswa    absensi_siswa[]
+  jurnal_mengajar  jurnal_mengajar[]
+}
+
+model sesi_absensi_guru {
+  id_sesi      Int       @id @default(autoincrement())
+  id_pengguna  Int
+  id_sekolah   Int
+  waktu_masuk  DateTime
+  waktu_pulang DateTime?
+  tanggal      DateTime
+  pengguna     pengguna  @relation(fields: [id_pengguna], references: [id_pengguna], onDelete: Cascade)
+  sekolah      sekolah   @relation(fields: [id_sekolah], references: [id_sekolah], onDelete: Cascade)
+
+  jurnal_mengajar jurnal_mengajar[]
+  absensi_siswa   absensi_siswa[]
+  catatan_siswa   catatan_siswa[]
+}
+
+model absensi_siswa {
+  id_absensi_siswa  Int               @id @default(autoincrement())
+  id_sesi_guru      Int
+  id_siswa          Int
+  id_jadwal         Int
+  status            StatusKehadiran
+  tanggal           DateTime
+  sesi_absensi_guru sesi_absensi_guru @relation(fields: [id_sesi_guru], references: [id_sesi], onDelete: Cascade)
+  siswa             siswa             @relation(fields: [id_siswa], references: [id_siswa], onDelete: Cascade)
+  jadwal_mengajar   jadwal_mengajar   @relation(fields: [id_jadwal], references: [id_jadwal], onDelete: Cascade)
+}
+
+model jurnal_mengajar {
+  id_jurnal        Int      @id @default(autoincrement())
+  id_sesi_guru     Int
+  id_jadwal        Int
+  materi_diajarkan String?
+  catatan_kegiatan String?
+  timestamp        DateTime @default(now())
+
+  sesi_absensi_guru sesi_absensi_guru @relation(fields: [id_sesi_guru], references: [id_sesi], onDelete: Cascade)
+  jadwal_mengajar   jadwal_mengajar   @relation(fields: [id_jadwal], references: [id_jadwal], onDelete: Cascade)
+}
+
+model catatan_siswa {
+  id_catatan    Int      @id @default(autoincrement())
+  id_sesi_guru  Int
+  id_siswa      Int
+  jenis_catatan String
+  deskripsi     String?
+  timestamp     DateTime @default(now())
+
+  sesi_absensi_guru sesi_absensi_guru @relation(fields: [id_sesi_guru], references: [id_sesi], onDelete: Cascade)
+  siswa             siswa             @relation(fields: [id_siswa], references: [id_siswa], onDelete: Cascade)
 }
